@@ -1304,11 +1304,9 @@
     Elevator SCAN Algorithm Demonstration • Designed for Responsive Visual Simulation • 4 Stories Single-Shaft
   </footer>
 
+
   <!-- JavaScript Simulation Core -->
   <script>
-    /**
-     * PASSENGER AVATAR STYLES GENERATOR
-     */
     const AVATAR_PALETTES = [
       { hair: '#f59e0b', clothes: '#06b6d4', skin: '#fcd34d' },
       { hair: '#8b5cf6', clothes: '#ec4899', skin: '#fed7aa' },
@@ -1324,7 +1322,7 @@
         this.toFloor = toFloor;
         this.direction = toFloor > fromFloor ? 'UP' : 'DOWN';
         this.palette = AVATAR_PALETTES[(id - 1) % AVATAR_PALETTES.length];
-        this.state = 'WAITING'; // 'WAITING', 'BOARDING', 'RIDING', 'ALIGHTING', 'EXITED'
+        this.state = 'WAITING';
         this.domElement = this.createDOM();
       }
 
@@ -1341,7 +1339,6 @@
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('class', 'passenger-svg walking');
         svg.setAttribute('viewBox', '0 0 30 50');
-
         svg.innerHTML = `
           <circle cx="15" cy="8" r="6" fill="${this.palette.skin}" />
           <path d="M9 7 Q15 2 21 7" stroke="${this.palette.hair}" stroke-width="3" fill="none" stroke-linecap="round" />
@@ -1349,7 +1346,6 @@
           <line class="leg-left" x1="10" y1="34" x2="10" y2="48" stroke="${this.palette.clothes}" stroke-width="4" stroke-linecap="round" />
           <line class="leg-right" x1="20" y1="34" x2="20" y2="48" stroke="${this.palette.clothes}" stroke-width="4" stroke-linecap="round" />
         `;
-
         wrap.appendChild(bubble);
         wrap.appendChild(svg);
         return wrap;
@@ -1357,138 +1353,304 @@
     }
 
     /**
-     * ELEVATOR SYSTEM & SCAN CONTROLLER
+     * ElevatorSimulation — SCAN / LOOK dispatch algorithm.
+     *
+     * Key design decisions:
+     *  1. tick() is fully sequential: door animation -> idle check -> move -> floor-arrival check.
+     *     Movement and stop-detection happen in the same branch, eliminating the "evaluate then
+     *     move" race that caused over-shooting and missed floors.
+     *  2. shouldStopAtFloor(f) is the single, authoritative stop predicate.
+     *  3. processBoardingAndAlighting() recomputes direction AFTER all boarding is complete,
+     *     so newly-added carCalls from boarded passengers influence the reversal decision.
+     *  4. anyAbove / anyBelow use strict integer comparisons; currentFloor is snapped to an
+     *     integer whenever the car stops, preventing floating-point drift.
      */
     class ElevatorSimulation {
       constructor() {
-        // State
-        this.currentFloor = 1.0;      // Continuous position 1.0 to 4.0
-        this.targetFloor = 1;         // Discrete target floor
-        this.direction = 'IDLE';      // 'UP', 'DOWN', 'IDLE'
-        this.doorState = 'CLOSED';    // 'CLOSED', 'OPENING', 'OPEN', 'CLOSING'
-        this.doorProgress = 0.0;      // 0.0 (closed) to 1.0 (fully open)
-        this.doorHoldTimer = 0.0;     // Seconds to hold door open for boarding
+        this.currentFloor  = 1.0;
+        this.direction     = 'IDLE';
+        this.doorState     = 'CLOSED';
+        this.doorProgress  = 0.0;
+        this.doorHoldTimer = 0.0;
 
-        // Collections
-        this.upHallCalls = new Set();    // Floors where people want to go UP
-        this.downHallCalls = new Set();  // Floors where people want to go DOWN
-        this.carCalls = new Set();       // Target floors requested by passengers inside
+        this.upHallCalls   = new Set();
+        this.downHallCalls = new Set();
+        this.carCalls      = new Set();
 
-        this.waitingPassengers = { 1: [], 2: [], 3: [], 4: [] };
-        this.onboardPassengers = [];
-        this.exitedPassengers = [];
-        this.passengerSeq = 1;
-        this.deliveredCount = 0;
+        this.waitingPassengers  = { 1: [], 2: [], 3: [], 4: [] };
+        this.onboardPassengers  = [];
+        this.passengerSeq       = 1;
+        this.deliveredCount     = 0;
 
-        // Configuration & Timing
-        this.speed = 1.0;
+        this.speed         = 1.0;
         this.floorHeightPx = 130;
-        this.isPaused = false;
-        this.isAutoMode = false;
-        this.autoTimer = null;
+        this.isPaused      = false;
+        this.isAutoMode    = false;
+        this.autoTimer     = null;
 
-        // UI Selections
         this.selectedFromFloor = 1;
-        this.selectedToFloor = 4;
+        this.selectedToFloor   = 4;
 
-        // DOM Cache
-        this.carDom = document.getElementById('elevatorCar');
-        this.cableDom = document.getElementById('elevatorCable');
-        this.doorLeftDom = document.getElementById('carDoorLeft');
-        this.doorRightDom = document.getElementById('carDoorRight');
-        this.carPaxSlotDom = document.getElementById('carPassengersSlot');
+        this.carDom             = document.getElementById('elevatorCar');
+        this.cableDom           = document.getElementById('elevatorCable');
+        this.doorLeftDom        = document.getElementById('carDoorLeft');
+        this.doorRightDom       = document.getElementById('carDoorRight');
+        this.carPaxSlotDom      = document.getElementById('carPassengersSlot');
         this.carDisplayFloorDom = document.getElementById('carDisplayFloor');
         this.carDisplayArrowDom = document.getElementById('carDisplayArrow');
-        this.carPaxCountDom = document.getElementById('carPaxCount');
+        this.carPaxCountDom     = document.getElementById('carPaxCount');
+        this.telemFloorDom      = document.getElementById('telemFloor');
+        this.telemDirDom        = document.getElementById('telemDir');
+        this.telemDoorDom       = document.getElementById('telemDoor');
+        this.telemPaxDom        = document.getElementById('telemPax');
+        this.hudExplanationDom  = document.getElementById('hudExplanation');
+        this.activityLogDom     = document.getElementById('activityLog');
+        this.deliveredCountDom  = document.getElementById('deliveredCount');
+        this.simStatusBadge     = document.getElementById('simStatusBadge');
+        this.simStatusText      = document.getElementById('simStatusText');
 
-        this.telemFloorDom = document.getElementById('telemFloor');
-        this.telemDirDom = document.getElementById('telemDir');
-        this.telemDoorDom = document.getElementById('telemDoor');
-        this.telemPaxDom = document.getElementById('telemPax');
-        this.hudExplanationDom = document.getElementById('hudExplanation');
-        this.activityLogDom = document.getElementById('activityLog');
-        this.deliveredCountDom = document.getElementById('deliveredCount');
-        this.simStatusBadge = document.getElementById('simStatusBadge');
-        this.simStatusText = document.getElementById('simStatusText');
-
-        // Main Loop Setup
         this.lastTimestamp = performance.now();
         this.updateVisualPositions();
-        this.log('INIT', 'Elevator initialized at Floor 1 (Lobby) in IDLE state.');
-        requestAnimationFrame((t) => this.loop(t));
+        this.log('INIT', 'Elevator at Floor 1 (Lobby) — IDLE.');
+        requestAnimationFrame(t => this.loop(t));
+      }
+
+      anyAbove(floor) {
+        for (const f of this.carCalls)      if (f > floor) return true;
+        for (const f of this.upHallCalls)   if (f > floor) return true;
+        for (const f of this.downHallCalls) if (f > floor) return true;
+        return false;
+      }
+
+      anyBelow(floor) {
+        for (const f of this.carCalls)      if (f < floor) return true;
+        for (const f of this.upHallCalls)   if (f < floor) return true;
+        for (const f of this.downHallCalls) if (f < floor) return true;
+        return false;
+      }
+
+      anyPending() {
+        return this.carCalls.size > 0 || this.upHallCalls.size > 0 || this.downHallCalls.size > 0;
+      }
+
+      shouldStopAtFloor(f) {
+        if (this.carCalls.has(f)) return true;
+        const upHere   = this.upHallCalls.has(f);
+        const downHere = this.downHallCalls.has(f);
+        if (this.direction === 'UP') {
+          if (upHere) return true;
+          if (!this.anyAbove(f) && downHere) return true;
+        }
+        if (this.direction === 'DOWN') {
+          if (downHere) return true;
+          if (!this.anyBelow(f) && upHere) return true;
+        }
+        return false;
+      }
+
+      chooseSCANDirection(fromFloor) {
+        if (this.anyAbove(fromFloor)) {
+          this.direction = 'UP';
+          this.log('SCAN', `Requests above Floor ${fromFloor} — heading UP.`);
+        } else if (this.anyBelow(fromFloor)) {
+          this.direction = 'DOWN';
+          this.log('SCAN', `Requests below Floor ${fromFloor} — heading DOWN.`);
+        } else {
+          this.direction = 'IDLE';
+        }
+      }
+
+      openDoors() {
+        this.doorState    = 'OPENING';
+        this.doorProgress = 0.0;
+        this.log('DOOR', `Floor ${Math.round(this.currentFloor)}: doors opening.`);
+      }
+
+      closeDoors() {
+        this.doorState = 'CLOSING';
+        this.log('DOOR', `Floor ${Math.round(this.currentFloor)}: doors closing.`);
+      }
+
+      processBoardingAndAlighting() {
+        const floor = Math.round(this.currentFloor);
+
+        const stillRiding = [];
+        for (const pax of this.onboardPassengers) {
+          if (pax.toFloor === floor) {
+            this.deliveredCount++;
+            this.deliveredCountDom.innerText = `${this.deliveredCount} DELIVERED`;
+            const exitCol = document.getElementById(`exitQueue${floor}`);
+            if (exitCol) {
+              pax.domElement.classList.remove('in-car');
+              const bubble = document.getElementById(`pax-bubble-${pax.id}`);
+              if (bubble) { bubble.className = 'passenger-bubble arrived'; bubble.innerText = 'Arrived!'; }
+              exitCol.appendChild(pax.domElement);
+              setTimeout(() => {
+                pax.domElement.style.opacity = '0';
+                setTimeout(() => { if (pax.domElement.parentNode) pax.domElement.parentNode.removeChild(pax.domElement); }, 600);
+              }, 1200);
+            }
+            this.log('EXIT', `Pax #${pax.id} arrived at Floor ${floor}.`);
+          } else {
+            stillRiding.push(pax);
+          }
+        }
+        this.onboardPassengers = stillRiding;
+        this.carCalls.delete(floor);
+
+        const terminalUp   = this.direction === 'UP'   && !this.anyAbove(floor);
+        const terminalDown = this.direction === 'DOWN'  && !this.anyBelow(floor);
+        const isTerminal   = terminalUp || terminalDown;
+
+        const waiting    = this.waitingPassengers[floor];
+        const leftBehind = [];
+        for (const pax of waiting) {
+          const sameDir = (this.direction === 'UP' && pax.direction === 'UP') ||
+                          (this.direction === 'DOWN' && pax.direction === 'DOWN');
+          if (sameDir || isTerminal) {
+            pax.state = 'RIDING';
+            this.onboardPassengers.push(pax);
+            this.carCalls.add(pax.toFloor);
+            pax.domElement.classList.add('in-car');
+            const bubble = document.getElementById(`pax-bubble-${pax.id}`);
+            if (bubble) bubble.innerText = `${pax.toFloor}F`;
+            this.carPaxSlotDom.appendChild(pax.domElement);
+            this.log('BOARD', `Pax #${pax.id} boarded — Floor ${pax.toFloor}.`);
+          } else {
+            leftBehind.push(pax);
+          }
+        }
+        this.waitingPassengers[floor] = leftBehind;
+        if (!leftBehind.some(p => p.direction === 'UP'))   this.upHallCalls.delete(floor);
+        if (!leftBehind.some(p => p.direction === 'DOWN')) this.downHallCalls.delete(floor);
+
+        if (this.direction === 'UP' && !this.anyAbove(floor)) {
+          if (this.anyBelow(floor)) { this.direction = 'DOWN'; this.log('SCAN', `Terminal UP at Floor ${floor} — reversing DOWN.`); }
+          else if (!this.anyPending()) { this.direction = 'IDLE'; }
+        } else if (this.direction === 'DOWN' && !this.anyBelow(floor)) {
+          if (this.anyAbove(floor)) { this.direction = 'UP'; this.log('SCAN', `Terminal DOWN at Floor ${floor} — reversing UP.`); }
+          else if (!this.anyPending()) { this.direction = 'IDLE'; }
+        }
+
+        this.updateHallButtons();
+        this.updateHUD();
+      }
+
+      loop(ts) {
+        const dt = Math.min((ts - this.lastTimestamp) / 1000, 0.1);
+        this.lastTimestamp = ts;
+        if (!this.isPaused) this.tick(dt * this.speed);
+        this.updateVisualPositions();
+        requestAnimationFrame(t => this.loop(t));
+      }
+
+      tick(dt) {
+        if (this.doorState === 'OPENING') {
+          this.doorProgress += dt * 2.5;
+          if (this.doorProgress >= 1.0) {
+            this.doorProgress = 1.0; this.doorState = 'OPEN'; this.doorHoldTimer = 1.2;
+            this.processBoardingAndAlighting();
+          }
+          return;
+        }
+        if (this.doorState === 'OPEN') {
+          this.doorHoldTimer -= dt;
+          if (this.doorHoldTimer <= 0) this.closeDoors();
+          return;
+        }
+        if (this.doorState === 'CLOSING') {
+          this.doorProgress -= dt * 2.5;
+          if (this.doorProgress <= 0.0) {
+            this.doorProgress = 0.0; this.doorState = 'CLOSED';
+            const f = Math.round(this.currentFloor);
+            if (!this.anyPending()) {
+              this.direction = 'IDLE';
+            } else if ((this.direction === 'UP' && !this.anyAbove(f)) ||
+                       (this.direction === 'DOWN' && !this.anyBelow(f)) ||
+                        this.direction === 'IDLE') {
+              this.chooseSCANDirection(f);
+            }
+            this.updateHUD();
+          }
+          return;
+        }
+
+        if (this.direction === 'IDLE') {
+          if (this.anyPending()) this.chooseSCANDirection(Math.round(this.currentFloor));
+          return;
+        }
+
+        const prevFloor = this.currentFloor;
+        const speed = 0.85;
+        if (this.direction === 'UP') {
+          this.currentFloor = Math.min(4.0, this.currentFloor + speed * dt);
+        } else {
+          this.currentFloor = Math.max(1.0, this.currentFloor - speed * dt);
+        }
+
+        const nearestFloor = Math.round(this.currentFloor);
+        const wasNear = Math.abs(prevFloor     - nearestFloor) < 0.045;
+        const isNear  = Math.abs(this.currentFloor - nearestFloor) < 0.045;
+
+        if (isNear && !wasNear && this.shouldStopAtFloor(nearestFloor)) {
+          this.currentFloor = nearestFloor;
+          this.openDoors();
+          return;
+        }
+
+        if (this.currentFloor >= 4.0 && this.direction === 'UP' && this.doorState === 'CLOSED') {
+          this.currentFloor = 4.0; this.openDoors();
+        }
+        if (this.currentFloor <= 1.0 && this.direction === 'DOWN' && this.doorState === 'CLOSED') {
+          this.currentFloor = 1.0; this.openDoors();
+        }
       }
 
       log(tag, message) {
         const d = new Date();
-        const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
-        
-        let tagClass = 'tag-scan';
-        if (tag === 'REQUEST') tagClass = 'tag-req';
-        else if (tag === 'BOARD' || tag === 'EXIT') tagClass = 'tag-board';
-        else if (tag === 'DOOR') tagClass = 'tag-door';
-
-        const entry = document.createElement('div');
-        entry.className = 'log-entry';
-        entry.innerHTML = `
-          <span class="log-time">${timeStr}</span>
-          <span class="log-tag ${tagClass}">[${tag}]</span>
-          <span>${message}</span>
-        `;
-        this.activityLogDom.prepend(entry);
-
-        if (this.activityLogDom.children.length > 50) {
-          this.activityLogDom.removeChild(this.activityLogDom.lastChild);
-        }
+        const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+        const cls = tag === 'REQUEST' ? 'tag-req' : (tag === 'BOARD' || tag === 'EXIT') ? 'tag-board' : tag === 'DOOR' ? 'tag-door' : 'tag-scan';
+        const e = document.createElement('div');
+        e.className = 'log-entry';
+        e.innerHTML = `<span class="log-time">${t}</span><span class="log-tag ${cls}">[${tag}]</span><span>${message}</span>`;
+        this.activityLogDom.prepend(e);
+        if (this.activityLogDom.children.length > 60) this.activityLogDom.removeChild(this.activityLogDom.lastChild);
       }
 
       setFromFloor(val) {
         this.selectedFromFloor = val;
-        document.querySelectorAll('#fromFloorGroup .btn-floor-choice').forEach(btn => {
-          btn.classList.toggle('selected', parseInt(btn.dataset.val) === val);
-        });
-        if (this.selectedToFloor === val) {
-          const next = val === 4 ? 3 : val + 1;
-          this.setToFloor(next);
-        }
+        document.querySelectorAll('#fromFloorGroup .btn-floor-choice').forEach(b => b.classList.toggle('selected', +b.dataset.val === val));
+        if (this.selectedToFloor === val) this.setToFloor(val === 4 ? 3 : val + 1);
       }
 
       setToFloor(val) {
         if (val === this.selectedFromFloor) return;
         this.selectedToFloor = val;
-        document.querySelectorAll('#toFloorGroup .btn-floor-choice').forEach(btn => {
-          btn.classList.toggle('selected-to', parseInt(btn.dataset.val) === val);
-        });
+        document.querySelectorAll('#toFloorGroup .btn-floor-choice').forEach(b => b.classList.toggle('selected-to', +b.dataset.val === val));
       }
 
       requestHallCall(floor, dir) {
-        if (dir === 'UP') this.upHallCalls.add(floor);
+        if (dir === 'UP')   this.upHallCalls.add(floor);
         if (dir === 'DOWN') this.downHallCalls.add(floor);
-        this.updateHallButtons();
-        this.updateHUD();
+        this.updateHallButtons(); this.updateHUD();
       }
 
       addPassenger(fromFloor, toFloor) {
         if (fromFloor === toFloor) return;
         const pax = new Passenger(this.passengerSeq++, fromFloor, toFloor);
         this.waitingPassengers[fromFloor].push(pax);
-
-        const container = document.getElementById(`waitingQueue${fromFloor}`);
-        if (container) container.appendChild(pax.domElement);
-
+        const c = document.getElementById(`waitingQueue${fromFloor}`);
+        if (c) c.appendChild(pax.domElement);
         this.requestHallCall(fromFloor, pax.direction);
-        this.log('REQUEST', `Passenger #${pax.id} arrived at ${fromFloor}F requesting ${toFloor}F (${pax.direction})`);
+        this.log('REQUEST', `Pax #${pax.id} at Floor ${fromFloor} -> Floor ${toFloor} (${pax.direction})`);
       }
 
-      addManualRequest() {
-        this.addPassenger(this.selectedFromFloor, this.selectedToFloor);
-      }
+      addManualRequest()  { this.addPassenger(this.selectedFromFloor, this.selectedToFloor); }
 
       addRandomRequest() {
-        const from = Math.floor(Math.random() * 4) + 1;
-        let to = Math.floor(Math.random() * 4) + 1;
-        while (to === from) {
-          to = Math.floor(Math.random() * 4) + 1;
-        }
+        const from = Math.ceil(Math.random() * 4);
+        let to = Math.ceil(Math.random() * 4);
+        while (to === from) to = Math.ceil(Math.random() * 4);
         this.addPassenger(from, to);
       }
 
@@ -1496,22 +1658,15 @@
         this.isAutoMode = true;
         document.getElementById('btnRun').classList.add('active');
         if (this.autoTimer) clearInterval(this.autoTimer);
-        this.autoTimer = setInterval(() => {
-          if (!this.isPaused && this.isAutoMode) {
-            this.addRandomRequest();
-          }
-        }, 3200 / this.speed);
-        this.log('SCAN', 'Automatic passenger arrival traffic enabled.');
+        this.autoTimer = setInterval(() => { if (!this.isPaused) this.addRandomRequest(); }, 3000 / this.speed);
+        this.log('SIM', 'Auto traffic enabled.');
       }
 
       stopAutoMode() {
         this.isAutoMode = false;
         document.getElementById('btnRun').classList.remove('active');
-        if (this.autoTimer) {
-          clearInterval(this.autoTimer);
-          this.autoTimer = null;
-        }
-        this.log('SCAN', 'Automatic traffic stopped.');
+        if (this.autoTimer) { clearInterval(this.autoTimer); this.autoTimer = null; }
+        this.log('SIM', 'Auto traffic stopped.');
       }
 
       pauseSimulation() {
@@ -1519,7 +1674,7 @@
         document.getElementById('btnPause').classList.add('active');
         this.simStatusBadge.classList.add('paused');
         this.simStatusText.innerText = 'SIMULATION PAUSED';
-        this.log('SIM', 'Simulation paused. You can queue multiple requests before resuming.');
+        this.log('SIM', 'Paused — queue requests then Resume.');
       }
 
       resumeSimulation() {
@@ -1534,394 +1689,75 @@
         this.speed = multiplier;
         document.querySelectorAll('.btn-speed').forEach(b => b.classList.remove('active'));
         if (btn) btn.classList.add('active');
-        if (this.isAutoMode) {
-          this.startAutoMode(); // Restart interval with new speed
-        }
-        this.log('SIM', `Speed set to ${multiplier}x`);
+        if (this.isAutoMode) this.startAutoMode();
+        this.log('SIM', `Speed -> ${multiplier}x`);
       }
 
-      hasHigherRequests(pos) {
-        return Array.from(this.carCalls).some(f => f > pos + 0.05) ||
-               Array.from(this.upHallCalls).some(f => f > pos + 0.05) ||
-               Array.from(this.downHallCalls).some(f => f > pos + 0.05);
-      }
-
-      hasLowerRequests(pos) {
-        return Array.from(this.carCalls).some(f => f < pos - 0.05) ||
-               Array.from(this.upHallCalls).some(f => f < pos - 0.05) ||
-               Array.from(this.downHallCalls).some(f => f < pos - 0.05);
-      }
-
-      /**
-       * PURE SCAN / LOOK ALGORITHM DISPATCHER
-       */
-      evaluateSCANDecision() {
-        const currentFloorInt = Math.round(this.currentFloor);
-        const isAtFloorExact = Math.abs(this.currentFloor - currentFloorInt) < 0.05;
-
-        const higherExists = this.hasHigherRequests(this.currentFloor);
-        const lowerExists = this.hasLowerRequests(this.currentFloor);
-
-        // Does current floor have pending services?
-        const hasCarDropoffHere = this.carCalls.has(currentFloorInt);
-        const hasUpPickupHere = this.upHallCalls.has(currentFloorInt);
-        const hasDownPickupHere = this.downHallCalls.has(currentFloorInt);
-
-        // 1. IF IDLE:
-        if (this.direction === 'IDLE') {
-          if (isAtFloorExact && (hasCarDropoffHere || hasUpPickupHere || hasDownPickupHere)) {
-            if (hasUpPickupHere) {
-              this.direction = 'UP';
-            } else if (hasDownPickupHere) {
-              this.direction = 'DOWN';
-            } else if (higherExists) {
-              this.direction = 'UP';
-            } else if (lowerExists) {
-              this.direction = 'DOWN';
-            }
-            this.currentFloor = currentFloorInt;
-            this.openDoors();
-            return;
-          }
-          if (higherExists) {
-            this.direction = 'UP';
-            this.log('SCAN', `New request detected above. Direction set to UP.`);
-          } else if (lowerExists) {
-            this.direction = 'DOWN';
-            this.log('SCAN', `New request detected below. Direction set to DOWN.`);
-          }
-          return;
-        }
-
-        // 2. IF MOVING UP:
-        if (this.direction === 'UP') {
-          if (isAtFloorExact) {
-            const higherBeyondThisFloor = this.hasHigherRequests(currentFloorInt);
-            const shouldStop = hasCarDropoffHere ||
-                               hasUpPickupHere ||
-                               (!higherBeyondThisFloor && hasDownPickupHere);
-
-            if (shouldStop && this.doorState === 'CLOSED') {
-              this.currentFloor = currentFloorInt;
-              this.openDoors();
-              return;
-            }
-          }
-
-          // Check if there are no higher requests ahead
-          if (!higherExists) {
-            if (lowerExists) {
-              this.direction = 'DOWN';
-              this.log('SCAN', `No further requests UP. Reversing SCAN sweep to DOWN.`);
-            } else if (!hasCarDropoffHere && !hasUpPickupHere && !hasDownPickupHere) {
-              this.direction = 'IDLE';
-              this.log('SCAN', `All requests served. Returning to IDLE.`);
-            }
-          }
-          return;
-        }
-
-        // 3. IF MOVING DOWN:
-        if (this.direction === 'DOWN') {
-          if (isAtFloorExact) {
-            const lowerBeyondThisFloor = this.hasLowerRequests(currentFloorInt);
-            const shouldStop = hasCarDropoffHere ||
-                               hasDownPickupHere ||
-                               (!lowerBeyondThisFloor && hasUpPickupHere);
-
-            if (shouldStop && this.doorState === 'CLOSED') {
-              this.currentFloor = currentFloorInt;
-              this.openDoors();
-              return;
-            }
-          }
-
-          // Check if there are no lower requests ahead
-          if (!lowerExists) {
-            if (higherExists) {
-              this.direction = 'UP';
-              this.log('SCAN', `No further requests DOWN. Reversing SCAN sweep to UP.`);
-            } else if (!hasCarDropoffHere && !hasUpPickupHere && !hasDownPickupHere) {
-              this.direction = 'IDLE';
-              this.log('SCAN', `All requests served. Returning to IDLE.`);
-            }
-          }
-        }
-      }
-
-      openDoors() {
-        this.doorState = 'OPENING';
-        this.doorProgress = 0.0;
-        this.log('DOOR', `Arrived at Floor ${Math.round(this.currentFloor)}. Doors opening...`);
-      }
-
-      closeDoors() {
-        this.doorState = 'CLOSING';
-        this.log('DOOR', `Doors closing at Floor ${Math.round(this.currentFloor)}.`);
-      }
-
-      processBoardingAndAlighting() {
-        const floor = Math.round(this.currentFloor);
-
-        // 1. Alight Passengers
-        const remainingOnboard = [];
-        for (const pax of this.onboardPassengers) {
-          if (pax.toFloor === floor) {
-            pax.state = 'ALIGHTING';
-            this.deliveredCount++;
-            this.deliveredCountDom.innerText = `${this.deliveredCount} DELIVERED`;
-            
-            // Move avatar to exit queue on the floor
-            const exitCol = document.getElementById(`exitQueue${floor}`);
-            if (exitCol) {
-              pax.domElement.classList.remove('in-car');
-              const bubble = document.getElementById(`pax-bubble-${pax.id}`);
-              if (bubble) {
-                bubble.className = 'passenger-bubble arrived';
-                bubble.innerText = 'Arrived!';
-              }
-              exitCol.appendChild(pax.domElement);
-              
-              // Fade out after walking away
-              setTimeout(() => {
-                pax.domElement.style.opacity = '0';
-                setTimeout(() => {
-                  if (pax.domElement.parentNode) {
-                    pax.domElement.parentNode.removeChild(pax.domElement);
-                  }
-                }, 600);
-              }, 1200);
-            }
-            this.log('EXIT', `Passenger #${pax.id} reached destination Floor ${floor}!`);
-          } else {
-            remainingOnboard.push(pax);
-          }
-        }
-        this.onboardPassengers = remainingOnboard;
-        this.carCalls.delete(floor);
-
-        // 2. Board Passengers
-        const waiting = this.waitingPassengers[floor];
-        const stillWaiting = [];
-
-        const higherBeyond = this.hasHigherRequests(floor);
-        const lowerBeyond = this.hasLowerRequests(floor);
-
-        for (const pax of waiting) {
-          const matchDirection = (this.direction === 'UP' && pax.direction === 'UP') ||
-                                 (this.direction === 'DOWN' && pax.direction === 'DOWN') ||
-                                 (this.direction === 'IDLE') ||
-                                 (this.direction === 'UP' && !higherBeyond && pax.direction === 'DOWN') ||
-                                 (this.direction === 'DOWN' && !lowerBeyond && pax.direction === 'UP');
-
-          if (matchDirection) {
-            pax.state = 'RIDING';
-            this.onboardPassengers.push(pax);
-            this.carCalls.add(pax.toFloor);
-
-            // Move DOM to car slot
-            pax.domElement.classList.add('in-car');
-            const bubble = document.getElementById(`pax-bubble-${pax.id}`);
-            if (bubble) bubble.innerText = `${pax.toFloor}F`;
-            this.carPaxSlotDom.appendChild(pax.domElement);
-
-            if (this.direction === 'IDLE') {
-              this.direction = pax.direction;
-            } else if (this.direction === 'UP' && !higherBeyond && pax.direction === 'DOWN') {
-              this.direction = 'DOWN';
-            } else if (this.direction === 'DOWN' && !lowerBeyond && pax.direction === 'UP') {
-              this.direction = 'UP';
-            }
-            this.log('BOARD', `Passenger #${pax.id} boarded elevator for Floor ${pax.toFloor}.`);
-          } else {
-            stillWaiting.push(pax);
-          }
-        }
-        this.waitingPassengers[floor] = stillWaiting;
-
-        // Clear hall call if no one left in that direction
-        if (!stillWaiting.some(p => p.direction === 'UP')) this.upHallCalls.delete(floor);
-        if (!stillWaiting.some(p => p.direction === 'DOWN')) this.downHallCalls.delete(floor);
-
-        this.updateHallButtons();
-        this.updateHUD();
-      }
-
-      /**
-       * MAIN SIMULATION TICK
-       */
-      loop(currentTimestamp) {
-        const deltaSeconds = Math.min((currentTimestamp - this.lastTimestamp) / 1000, 0.1);
-        this.lastTimestamp = currentTimestamp;
-
-        if (!this.isPaused) {
-          this.tick(deltaSeconds * this.speed);
-        }
-
-        this.updateVisualPositions();
-        requestAnimationFrame((t) => this.loop(t));
-      }
-
-      tick(dt) {
-        // Handle Door Opening/Closing Animation & Dwell
-        if (this.doorState === 'OPENING') {
-          this.doorProgress += dt * 2.5; // ~0.4s to open
-          if (this.doorProgress >= 1.0) {
-            this.doorProgress = 1.0;
-            this.doorState = 'OPEN';
-            this.doorHoldTimer = 1.2; // Stay open for 1.2s
-            this.processBoardingAndAlighting();
-          }
-        } else if (this.doorState === 'OPEN') {
-          this.doorHoldTimer -= dt;
-          if (this.doorHoldTimer <= 0) {
-            this.closeDoors();
-          }
-        } else if (this.doorState === 'CLOSING') {
-          this.doorProgress -= dt * 2.5;
-          if (this.doorProgress <= 0.0) {
-            this.doorProgress = 0.0;
-            this.doorState = 'CLOSED';
-
-            // Post-door-close directional check using precise float checks
-            const higherExists = this.hasHigherRequests(this.currentFloor);
-            const lowerExists = this.hasLowerRequests(this.currentFloor);
-
-            if (this.direction === 'UP' && !higherExists) {
-              this.direction = lowerExists ? 'DOWN' : 'IDLE';
-            } else if (this.direction === 'DOWN' && !lowerExists) {
-              this.direction = higherExists ? 'UP' : 'IDLE';
-            } else if (this.direction === 'IDLE') {
-              if (higherExists) this.direction = 'UP';
-              else if (lowerExists) this.direction = 'DOWN';
-            }
-            this.updateHUD();
-          }
-        } else if (this.doorState === 'CLOSED') {
-          this.evaluateSCANDecision();
-
-          // Physical Movement
-          const moveSpeedFloorsPerSec = 0.8; // 0.8 floors per second
-          if (this.direction === 'UP') {
-            this.currentFloor += moveSpeedFloorsPerSec * dt;
-            if (this.currentFloor >= 4.0) {
-              this.currentFloor = 4.0;
-            }
-          } else if (this.direction === 'DOWN') {
-            this.currentFloor -= moveSpeedFloorsPerSec * dt;
-            if (this.currentFloor <= 1.0) {
-              this.currentFloor = 1.0;
-            }
-          }
-        }
-      }
-
-      /**
-       * VISUAL DOM & TELEMETRY UPDATES
-       */
       updateVisualPositions() {
-        // Floor position in pixels
-        const bottomOffset = 12 + (this.currentFloor - 1.0) * this.floorHeightPx;
-        this.carDom.style.transform = `translateY(${- (this.currentFloor - 1.0) * this.floorHeightPx}px)`;
+        this.carDom.style.transform = `translateY(${-(this.currentFloor - 1.0) * this.floorHeightPx}px)`;
+        const total = 4 * this.floorHeightPx + 40;
+        const carTop = 12 + (this.currentFloor - 1.0) * this.floorHeightPx + 104;
+        this.cableDom.style.height = `${Math.max(0, total - carTop)}px`;
 
-        // Cable height stretches from top of roof down to car
-        const totalHeight = 4 * this.floorHeightPx + 40;
-        const carTopFromBottom = 12 + (this.currentFloor - 1.0) * this.floorHeightPx + 104;
-        const cableHeight = Math.max(0, totalHeight - carTopFromBottom);
-        this.cableDom.style.height = `${cableHeight}px`;
+        const pct = this.doorProgress * 92;
+        this.doorLeftDom.style.transform  = `translateX(-${pct}%)`;
+        this.doorRightDom.style.transform = `translateX(${pct}%)`;
 
-        // Door Sliding Width
-        const doorPercent = this.doorProgress * 92;
-        this.doorLeftDom.style.transform = `translateX(-${doorPercent}%)`;
-        this.doorRightDom.style.transform = `translateX(${doorPercent}%)`;
-
-        // Telemetry Text
-        const approxFloor = Math.round(this.currentFloor * 10) / 10;
-        this.telemFloorDom.innerText = `${approxFloor.toFixed(1)} F`;
+        const approx = Math.round(this.currentFloor * 10) / 10;
+        this.telemFloorDom.innerText      = `${approx.toFixed(1)} F`;
         this.carDisplayFloorDom.innerText = `${Math.round(this.currentFloor)}F`;
 
-        // Arrow Indicator
         if (this.direction === 'UP') {
           this.telemDirDom.className = 'telemetry-value dir-up';
-          this.telemDirDom.innerText = '▲ ASCENDING';
-          this.carDisplayArrowDom.innerText = '▲';
+          this.telemDirDom.innerText = 'UP ASCENDING';
+          this.carDisplayArrowDom.innerText = 'UP';
           this.carDisplayArrowDom.style.color = 'var(--accent-cyan)';
         } else if (this.direction === 'DOWN') {
           this.telemDirDom.className = 'telemetry-value dir-down';
-          this.telemDirDom.innerText = '▼ DESCENDING';
-          this.carDisplayArrowDom.innerText = '▼';
+          this.telemDirDom.innerText = 'DN DESCENDING';
+          this.carDisplayArrowDom.innerText = 'DN';
           this.carDisplayArrowDom.style.color = 'var(--accent-amber)';
         } else {
           this.telemDirDom.className = 'telemetry-value dir-idle';
-          this.telemDirDom.innerText = '⏹ IDLE';
-          this.carDisplayArrowDom.innerText = '•';
+          this.telemDirDom.innerText = 'IDLE';
+          this.carDisplayArrowDom.innerText = '.';
           this.carDisplayArrowDom.style.color = 'var(--text-muted)';
         }
 
         this.telemDoorDom.innerText = this.doorState;
-        if (this.doorState === 'OPEN' || this.doorState === 'OPENING') {
-          this.telemDoorDom.style.color = 'var(--accent-emerald)';
-        } else if (this.doorState === 'CLOSING') {
-          this.telemDoorDom.style.color = 'var(--accent-amber)';
-        } else {
-          this.telemDoorDom.style.color = '#f8fafc';
-        }
+        this.telemDoorDom.style.color =
+          (this.doorState === 'OPEN' || this.doorState === 'OPENING') ? 'var(--accent-emerald)' :
+          this.doorState === 'CLOSING' ? 'var(--accent-amber)' : '#f8fafc';
 
-        const totalWaiting = Object.values(this.waitingPassengers).reduce((sum, arr) => sum + arr.length, 0);
-        this.telemPaxDom.innerText = `${this.onboardPassengers.length} / ${totalWaiting}`;
+        const waiting = Object.values(this.waitingPassengers).reduce((s, a) => s + a.length, 0);
+        this.telemPaxDom.innerText    = `${this.onboardPassengers.length} / ${waiting}`;
         this.carPaxCountDom.innerText = `${this.onboardPassengers.length} PAX`;
       }
 
       updateHallButtons() {
         for (let f = 1; f <= 4; f++) {
-          const upBtn = document.getElementById(`btnHallUp${f}`);
-          const downBtn = document.getElementById(`btnHallDown${f}`);
-          if (upBtn) upBtn.classList.toggle('active-up', this.upHallCalls.has(f));
-          if (downBtn) downBtn.classList.toggle('active-down', this.downHallCalls.has(f));
+          const u = document.getElementById(`btnHallUp${f}`);
+          const d = document.getElementById(`btnHallDown${f}`);
+          if (u) u.classList.toggle('active-up',   this.upHallCalls.has(f));
+          if (d) d.classList.toggle('active-down', this.downHallCalls.has(f));
         }
       }
 
       updateHUD() {
-        // UP Chips
-        const upEl = document.getElementById('chipListUp');
-        if (this.upHallCalls.size === 0) {
-          upEl.innerHTML = '<span style="color:#64748b; font-size:0.7rem">None</span>';
-        } else {
-          upEl.innerHTML = Array.from(this.upHallCalls).sort((a,b)=>a-b).map(f => `<span class="chip-floor up">${f}F</span>`).join('');
-        }
+        const none = '<span style="color:#64748b;font-size:0.7rem">None</span>';
+        document.getElementById('chipListUp').innerHTML   = this.upHallCalls.size   ? [...this.upHallCalls].sort((a,b)=>a-b).map(f=>`<span class="chip-floor up">${f}F</span>`).join('') : none;
+        document.getElementById('chipListDown').innerHTML = this.downHallCalls.size ? [...this.downHallCalls].sort((a,b)=>b-a).map(f=>`<span class="chip-floor down">${f}F</span>`).join('') : none;
+        document.getElementById('chipListCar').innerHTML  = this.carCalls.size      ? [...this.carCalls].sort((a,b)=>a-b).map(f=>`<span class="chip-floor car">${f}F</span>`).join('') : none;
 
-        // DOWN Chips
-        const downEl = document.getElementById('chipListDown');
-        if (this.downHallCalls.size === 0) {
-          downEl.innerHTML = '<span style="color:#64748b; font-size:0.7rem">None</span>';
-        } else {
-          downEl.innerHTML = Array.from(this.downHallCalls).sort((a,b)=>b-a).map(f => `<span class="chip-floor down">${f}F</span>`).join('');
-        }
-
-        // CAR Chips
-        const carEl = document.getElementById('chipListCar');
-        if (this.carCalls.size === 0) {
-          carEl.innerHTML = '<span style="color:#64748b; font-size:0.7rem">None</span>';
-        } else {
-          carEl.innerHTML = Array.from(this.carCalls).sort((a,b)=>a-b).map(f => `<span class="chip-floor car">${f}F</span>`).join('');
-        }
-
-        // Explanation text
-        if (this.direction === 'UP') {
-          this.hudExplanationDom.innerText = `SCAN SWEEP (UP): Servicing upward hall calls and drop-offs until highest request, then checking reverse.`;
-        } else if (this.direction === 'DOWN') {
-          this.hudExplanationDom.innerText = `SCAN SWEEP (DOWN): Servicing downward hall calls and drop-offs until lowest request, then checking reverse.`;
-        } else {
-          this.hudExplanationDom.innerText = `IDLE: Waiting for passenger hall calls or car requests.`;
-        }
+        this.hudExplanationDom.innerText =
+          this.direction === 'UP'   ? 'SCAN SWEEP (UP): Serving upward calls and drop-offs. Reverses at highest pending request.' :
+          this.direction === 'DOWN' ? 'SCAN SWEEP (DOWN): Serving downward calls and drop-offs. Reverses at lowest pending request.' :
+                                     'IDLE: No pending requests. Waiting for hall calls or manual requests.';
       }
     }
 
-    // Initialize simulation application on page load
     let app;
-    window.addEventListener('DOMContentLoaded', () => {
-      app = new ElevatorSimulation();
-    });
+    window.addEventListener('DOMContentLoaded', () => { app = new ElevatorSimulation(); });
   </script>
 </body>
 </html>
