@@ -1,0 +1,1927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Elevator Algorithm (SCAN) Interactive Simulation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-gradient: radial-gradient(circle at 50% 10%, #171d2f 0%, #0c101b 60%, #070910 100%);
+      --surface-1: rgba(22, 29, 47, 0.75);
+      --surface-2: rgba(30, 41, 67, 0.85);
+      --surface-border: rgba(255, 255, 255, 0.1);
+      --surface-border-glow: rgba(0, 240, 255, 0.3);
+      --accent-cyan: #00f0ff;
+      --accent-cyan-glow: rgba(0, 240, 255, 0.5);
+      --accent-amber: #ffb703;
+      --accent-amber-glow: rgba(255, 183, 3, 0.5);
+      --accent-emerald: #10b981;
+      --accent-emerald-glow: rgba(16, 185, 129, 0.4);
+      --accent-rose: #f43f5e;
+      --accent-purple: #8b5cf6;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --shaft-width: 140px;
+      --floor-height: 130px;
+      --car-width: 104px;
+      --car-height: 104px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      background: rgba(12, 16, 27, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #00f0ff 0%, #3b82f6 50%, #8b5cf6 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+    }
+
+    .logo-title h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      background: linear-gradient(to right, #ffffff, #00f0ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .logo-title span {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 1px;
+    }
+
+    .header-badges {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .badge-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--accent-emerald);
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+
+    .badge-status.paused {
+      background: rgba(255, 183, 3, 0.12);
+      border-color: rgba(255, 183, 3, 0.3);
+      color: var(--accent-amber);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 10px currentColor;
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 24px;
+      padding: 24px 28px;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 1180px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Simulation View Area */
+    .sim-panel {
+      background: var(--surface-1);
+      border: 1px solid var(--surface-border);
+      border-radius: 20px;
+      backdrop-filter: blur(20px);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .sim-panel::before {
+      content: '';
+      position: absolute;
+      top: -100px;
+      right: -100px;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(0, 240, 255, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Elevator Telemetry Bar */
+    .telemetry-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--surface-border);
+      border-radius: 14px;
+      padding: 12px 18px;
+    }
+
+    .telemetry-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .telemetry-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+
+    .telemetry-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .telemetry-value.dir-up { color: var(--accent-cyan); text-shadow: 0 0 10px var(--accent-cyan-glow); }
+    .telemetry-value.dir-down { color: var(--accent-amber); text-shadow: 0 0 10px var(--accent-amber-glow); }
+    .telemetry-value.dir-idle { color: var(--text-muted); }
+
+    /* Building & Shaft Structure */
+    .building-stage {
+      position: relative;
+      height: calc(4 * var(--floor-height) + 40px);
+      background: linear-gradient(180deg, rgba(17, 24, 39, 0.8) 0%, rgba(10, 15, 26, 0.95) 100%);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Motor Room Roof */
+    .roof-motor-room {
+      height: 40px;
+      background: linear-gradient(90deg, #1e293b, #334155, #1e293b);
+      border-bottom: 2px solid #475569;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 10;
+    }
+
+    .roof-motor-room::after {
+      content: 'TRACTION MOTOR & SCAN CONTROLLER ROOM';
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 2px;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .pulley-wheel {
+      position: absolute;
+      left: calc(140px + var(--shaft-width) / 2);
+      transform: translateX(-50%);
+      width: 28px;
+      height: 28px;
+      border: 3px solid #64748b;
+      border-radius: 50%;
+      background: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+    }
+
+    .pulley-wheel::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+    }
+
+    /* Floors Container */
+    .floors-container {
+      position: relative;
+      flex: 1;
+      display: flex;
+      flex-direction: column-reverse; /* Floor 1 at bottom, 4 at top */
+    }
+
+    .floor-row {
+      height: var(--floor-height);
+      display: grid;
+      grid-template-columns: 140px var(--shaft-width) 1fr;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      position: relative;
+    }
+
+    .floor-row:last-child {
+      border-top: none;
+    }
+
+    /* Floor Info Card (Left Column) */
+    .floor-info {
+      padding: 12px 14px;
+      background: rgba(15, 23, 42, 0.4);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .floor-number-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .floor-digit {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1;
+    }
+
+    .floor-name-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .floor-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      letter-spacing: 0.5px;
+    }
+
+    .floor-subtitle {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+
+    /* Hall Call Station Buttons (Inside Left Col) */
+    .hall-call-station {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .btn-hall-call {
+      flex: 1;
+      height: 28px;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      transition: all 0.2s ease;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .btn-hall-call:hover {
+      border-color: var(--accent-cyan);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .btn-hall-call.active-up {
+      background: rgba(0, 240, 255, 0.25);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      box-shadow: 0 0 12px var(--accent-cyan-glow);
+    }
+
+    .btn-hall-call.active-down {
+      background: rgba(255, 183, 3, 0.25);
+      border-color: var(--accent-amber);
+      color: var(--accent-amber);
+      box-shadow: 0 0 12px var(--accent-amber-glow);
+    }
+
+    /* Elevator Shaft (Middle Column) */
+    .shaft-col {
+      background: rgba(8, 12, 22, 0.75);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      position: relative;
+      overflow: visible;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Structural Rails */
+    .shaft-rail-left, .shaft-rail-right {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: linear-gradient(180deg, #475569 0%, #334155 100%);
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+    }
+
+    .shaft-rail-left { left: 12px; }
+    .shaft-rail-right { right: 12px; }
+
+    /* Moving Elevator Cab */
+    .elevator-car {
+      position: absolute;
+      width: var(--car-width);
+      height: var(--car-height);
+      left: calc(140px + (var(--shaft-width) - var(--car-width)) / 2);
+      bottom: 12px; /* Animated via JS transform */
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+      border: 2px solid #38bdf8;
+      border-radius: 10px;
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.35), inset 0 0 15px rgba(0, 0, 0, 0.8);
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.08s linear;
+      will-change: transform;
+      overflow: hidden;
+    }
+
+    /* Steel Cable */
+    .elevator-cable {
+      position: absolute;
+      top: 0;
+      left: calc(140px + var(--shaft-width) / 2 - 1.5px);
+      width: 3px;
+      background: repeating-linear-gradient(
+        180deg,
+        #94a3b8,
+        #94a3b8 4px,
+        #475569 4px,
+        #475569 8px
+      );
+      z-index: 25;
+      box-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+    }
+
+    /* Car Header Bar */
+    .car-header {
+      height: 22px;
+      background: rgba(15, 23, 42, 0.9);
+      border-bottom: 1px solid rgba(56, 189, 248, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+    }
+
+    .car-display-screen {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+
+    .car-capacity-pill {
+      font-size: 0.62rem;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Car Interior & Sliding Doors */
+    .car-interior {
+      flex: 1;
+      position: relative;
+      background: radial-gradient(circle at 50% 30%, rgba(56, 189, 248, 0.15) 0%, rgba(15, 23, 42, 0.9) 80%);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 6px;
+      overflow: hidden;
+    }
+
+    /* Passengers Container Inside Car */
+    .car-passengers-slot {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      z-index: 5;
+    }
+
+    /* Sliding Double Doors */
+    .door-panel {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 50%;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1px solid #475569;
+      z-index: 10;
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .door-panel::after {
+      content: '';
+      width: 4px;
+      height: 40px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+    }
+
+    .door-left {
+      left: 0;
+      border-right: 1px solid #00f0ff;
+    }
+
+    .door-right {
+      right: 0;
+      border-left: 1px solid #00f0ff;
+    }
+
+    .doors-open .door-left {
+      transform: translateX(-92%);
+    }
+
+    .doors-open .door-right {
+      transform: translateX(92%);
+    }
+
+    /* Landing Floor (Right Column) */
+    .floor-landing {
+      padding: 10px 16px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      position: relative;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.01) 0%, rgba(255, 255, 255, 0.03) 100%);
+    }
+
+    .landing-floor-line {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 8px;
+      background: linear-gradient(90deg, #334155, #64748b, #334155);
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Queue Area for Waiting Passengers */
+    .waiting-queue {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      margin-bottom: 8px;
+      z-index: 15;
+      min-height: 70px;
+    }
+
+    .exit-corridor {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      margin-bottom: 8px;
+      z-index: 15;
+      min-height: 70px;
+    }
+
+    /* Passenger Avatar SVG & Styling */
+    .passenger-avatar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: default;
+      transition: opacity 0.5s ease, transform 0.4s ease;
+      position: relative;
+    }
+
+    .passenger-bubble {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 6px;
+      padding: 2px 6px;
+      font-size: 0.65rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      margin-bottom: 4px;
+      box-shadow: 0 0 8px var(--accent-cyan-glow);
+      animation: floatBadge 2s infinite ease-in-out;
+    }
+
+    .passenger-bubble.dir-down {
+      border-color: var(--accent-amber);
+      box-shadow: 0 0 8px var(--accent-amber-glow);
+    }
+
+    .passenger-bubble.arrived {
+      border-color: var(--accent-emerald);
+      color: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald-glow);
+    }
+
+    @keyframes floatBadge {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+
+    .passenger-svg {
+      width: 26px;
+      height: 48px;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    }
+
+    .walking .leg-left {
+      animation: walkLeft 0.5s infinite alternate ease-in-out;
+      transform-origin: top center;
+    }
+
+    .walking .leg-right {
+      animation: walkRight 0.5s infinite alternate ease-in-out;
+      transform-origin: top center;
+    }
+
+    @keyframes walkLeft {
+      0% { transform: rotate(-25deg); }
+      100% { transform: rotate(25deg); }
+    }
+
+    @keyframes walkRight {
+      0% { transform: rotate(25deg); }
+      100% { transform: rotate(-25deg); }
+    }
+
+    /* Control Panel (Right Sidebar) */
+    .controls-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .control-card {
+      background: var(--surface-1);
+      border: 1px solid var(--surface-border);
+      border-radius: 18px;
+      padding: 20px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title svg {
+      color: var(--accent-cyan);
+    }
+
+    /* Manual Request Controls */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+
+    .floor-select-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      padding: 3px;
+    }
+
+    .btn-floor-choice {
+      background: transparent;
+      border: none;
+      border-radius: 7px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 6px 0;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-floor-choice:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .btn-floor-choice.selected {
+      background: var(--accent-cyan);
+      color: #0c101b;
+      box-shadow: 0 0 10px var(--accent-cyan-glow);
+    }
+
+    .btn-floor-choice.selected-to {
+      background: var(--accent-amber);
+      color: #0c101b;
+      box-shadow: 0 0 10px var(--accent-amber-glow);
+    }
+
+    /* Action Buttons */
+    .btn-primary {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #00f0ff 0%, #0284c7 100%);
+      border: none;
+      border-radius: 10px;
+      color: #080d1a;
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 15px rgba(0, 240, 255, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 240, 255, 0.5);
+    }
+
+    .btn-primary:active {
+      transform: translateY(1px);
+    }
+
+    /* Simulation Control Grid */
+    .sim-button-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btn-sim-action {
+      padding: 10px;
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      color: var(--text-main);
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-sim-action:hover {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn-sim-action.btn-random {
+      grid-column: span 2;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(99, 102, 241, 0.3) 100%);
+      border-color: rgba(139, 92, 246, 0.4);
+      color: #c4b5fd;
+    }
+
+    .btn-sim-action.btn-random:hover {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.5) 0%, rgba(99, 102, 241, 0.5) 100%);
+      color: #fff;
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);
+    }
+
+    .btn-sim-action.btn-run.active {
+      background: rgba(16, 185, 129, 0.25);
+      border-color: var(--accent-emerald);
+      color: var(--accent-emerald);
+      box-shadow: 0 0 12px var(--accent-emerald-glow);
+    }
+
+    .btn-sim-action.btn-pause.active {
+      background: rgba(255, 183, 3, 0.25);
+      border-color: var(--accent-amber);
+      color: var(--accent-amber);
+      box-shadow: 0 0 12px var(--accent-amber-glow);
+    }
+
+    /* Speed & Extra Options */
+    .speed-control-group {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .speed-pills {
+      display: flex;
+      gap: 4px;
+      background: rgba(15, 23, 42, 0.6);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid var(--surface-border);
+    }
+
+    .btn-speed {
+      padding: 4px 8px;
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-speed.active {
+      background: #334155;
+      color: #fff;
+    }
+
+    /* SCAN Algorithm Inspector HUD */
+    .algorithm-hud {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .hud-explanation {
+      background: rgba(15, 23, 42, 0.8);
+      border-left: 3px solid var(--accent-cyan);
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.78rem;
+      line-height: 1.4;
+      color: var(--text-main);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .queue-chips-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .queue-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .queue-label {
+      color: var(--text-dim);
+    }
+
+    .chips-list {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .chip-floor {
+      padding: 2px 7px;
+      background: #1e293b;
+      border: 1px solid #475569;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .chip-floor.up {
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+
+    .chip-floor.down {
+      border-color: var(--accent-amber);
+      color: var(--accent-amber);
+    }
+
+    .chip-floor.car {
+      border-color: var(--accent-purple);
+      color: #c4b5fd;
+    }
+
+    /* Live Activity Log */
+    .log-container {
+      height: 140px;
+      background: rgba(10, 14, 23, 0.9);
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .log-entry {
+      display: flex;
+      gap: 6px;
+      color: var(--text-muted);
+      line-height: 1.3;
+    }
+
+    .log-time {
+      color: var(--text-dim);
+    }
+
+    .log-tag {
+      font-weight: 700;
+      padding: 0 4px;
+      border-radius: 3px;
+    }
+
+    .tag-req { background: rgba(0, 240, 255, 0.15); color: var(--accent-cyan); }
+    .tag-board { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
+    .tag-scan { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; }
+    .tag-door { background: rgba(255, 183, 3, 0.15); color: var(--accent-amber); }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--surface-border);
+      padding: 12px 28px;
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      background: rgba(12, 16, 27, 0.5);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="logo-group">
+      <div class="logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0c101b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="2" width="16" height="20" rx="2" />
+          <path d="M9 10l3-3 3 3" />
+          <path d="M9 14l3 3 3-3" />
+        </svg>
+      </div>
+      <div class="logo-title">
+        <h1>ELEVATOR SCAN SIMULATOR</h1>
+        <span>DISPATCH ALGORITHM • 4-STORY ARCHITECTURE</span>
+      </div>
+    </div>
+
+    <div class="header-badges">
+      <div id="simStatusBadge" class="badge-status">
+        <div class="status-dot"></div>
+        <span id="simStatusText">ACTIVE SIMULATION</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main View -->
+  <main>
+    <!-- Left Stage: Building, Shaft, and Telemetry -->
+    <section class="sim-panel">
+      <!-- Live Telemetry Grid -->
+      <div class="telemetry-bar">
+        <div class="telemetry-item">
+          <span class="telemetry-label">Current Floor</span>
+          <div class="telemetry-value" id="telemFloor">1.0</div>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">SCAN Direction</span>
+          <div class="telemetry-value dir-idle" id="telemDir">⏹ IDLE</div>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">Door State</span>
+          <div class="telemetry-value" id="telemDoor" style="color:#f8fafc">CLOSED</div>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">Onboard / Wait</span>
+          <div class="telemetry-value" id="telemPax" style="color:var(--accent-purple)">0 / 0</div>
+        </div>
+      </div>
+
+      <!-- Building Cross-Section -->
+      <div class="building-stage">
+        <!-- Motor Room -->
+        <div class="roof-motor-room">
+          <div class="pulley-wheel"></div>
+        </div>
+
+        <!-- Cable -->
+        <div id="elevatorCable" class="elevator-cable"></div>
+
+        <!-- Elevator Car -->
+        <div id="elevatorCar" class="elevator-car">
+          <div class="car-header">
+            <div class="car-display-screen">
+              <span id="carDisplayFloor">1F</span>
+              <span id="carDisplayArrow">▲</span>
+            </div>
+            <div class="car-capacity-pill" id="carPaxCount">0 PAX</div>
+          </div>
+          <div class="car-interior">
+            <div id="carDoorLeft" class="door-panel door-left"></div>
+            <div id="carDoorRight" class="door-panel door-right"></div>
+            <div class="car-passengers-slot" id="carPassengersSlot"></div>
+          </div>
+        </div>
+
+        <!-- Floors 4 to 1 -->
+        <div class="floors-container">
+          <!-- Floor 1 -->
+          <div class="floor-row" data-floor="1">
+            <div class="floor-info">
+              <div class="floor-number-badge">
+                <span class="floor-digit">1</span>
+                <div class="floor-name-group">
+                  <span class="floor-label">LOBBY</span>
+                  <span class="floor-subtitle">Ground Entrance</span>
+                </div>
+              </div>
+              <div class="hall-call-station">
+                <button class="btn-hall-call" id="btnHallUp1" onclick="app.requestHallCall(1, 'UP')">▲ UP</button>
+              </div>
+            </div>
+            <div class="shaft-col">
+              <div class="shaft-rail-left"></div>
+              <div class="shaft-rail-right"></div>
+            </div>
+            <div class="floor-landing">
+              <div class="waiting-queue" id="waitingQueue1"></div>
+              <div class="exit-corridor" id="exitQueue1"></div>
+              <div class="landing-floor-line"></div>
+            </div>
+          </div>
+
+          <!-- Floor 2 -->
+          <div class="floor-row" data-floor="2">
+            <div class="floor-info">
+              <div class="floor-number-badge">
+                <span class="floor-digit">2</span>
+                <div class="floor-name-group">
+                  <span class="floor-label">SUITES</span>
+                  <span class="floor-subtitle">Residential Level</span>
+                </div>
+              </div>
+              <div class="hall-call-station">
+                <button class="btn-hall-call" id="btnHallUp2" onclick="app.requestHallCall(2, 'UP')">▲ UP</button>
+                <button class="btn-hall-call" id="btnHallDown2" onclick="app.requestHallCall(2, 'DOWN')">▼ DN</button>
+              </div>
+            </div>
+            <div class="shaft-col">
+              <div class="shaft-rail-left"></div>
+              <div class="shaft-rail-right"></div>
+            </div>
+            <div class="floor-landing">
+              <div class="waiting-queue" id="waitingQueue2"></div>
+              <div class="exit-corridor" id="exitQueue2"></div>
+              <div class="landing-floor-line"></div>
+            </div>
+          </div>
+
+          <!-- Floor 3 -->
+          <div class="floor-row" data-floor="3">
+            <div class="floor-info">
+              <div class="floor-number-badge">
+                <span class="floor-digit">3</span>
+                <div class="floor-name-group">
+                  <span class="floor-label">OFFICES</span>
+                  <span class="floor-subtitle">Innovation Hub</span>
+                </div>
+              </div>
+              <div class="hall-call-station">
+                <button class="btn-hall-call" id="btnHallUp3" onclick="app.requestHallCall(3, 'UP')">▲ UP</button>
+                <button class="btn-hall-call" id="btnHallDown3" onclick="app.requestHallCall(3, 'DOWN')">▼ DN</button>
+              </div>
+            </div>
+            <div class="shaft-col">
+              <div class="shaft-rail-left"></div>
+              <div class="shaft-rail-right"></div>
+            </div>
+            <div class="floor-landing">
+              <div class="waiting-queue" id="waitingQueue3"></div>
+              <div class="exit-corridor" id="exitQueue3"></div>
+              <div class="landing-floor-line"></div>
+            </div>
+          </div>
+
+          <!-- Floor 4 -->
+          <div class="floor-row" data-floor="4">
+            <div class="floor-info">
+              <div class="floor-number-badge">
+                <span class="floor-digit">4</span>
+                <div class="floor-name-group">
+                  <span class="floor-label">SKY LOUNGE</span>
+                  <span class="floor-subtitle">Penthouse Deck</span>
+                </div>
+              </div>
+              <div class="hall-call-station">
+                <button class="btn-hall-call" id="btnHallDown4" onclick="app.requestHallCall(4, 'DOWN')">▼ DN</button>
+              </div>
+            </div>
+            <div class="shaft-col">
+              <div class="shaft-rail-left"></div>
+              <div class="shaft-rail-right"></div>
+            </div>
+            <div class="floor-landing">
+              <div class="waiting-queue" id="waitingQueue4"></div>
+              <div class="exit-corridor" id="exitQueue4"></div>
+              <div class="landing-floor-line"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Sidebar: Interactive Controls & SCAN HUD -->
+    <aside class="controls-sidebar">
+      <!-- Manual Request Card -->
+      <div class="control-card">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <line x1="19" y1="8" x2="19" y2="14"/>
+            <line x1="22" y1="11" x2="16" y2="11"/>
+          </svg>
+          Add Passenger Request
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">FROM FLOOR</label>
+            <div class="floor-select-grid" id="fromFloorGroup">
+              <button class="btn-floor-choice selected" data-val="1" onclick="app.setFromFloor(1)">1</button>
+              <button class="btn-floor-choice" data-val="2" onclick="app.setFromFloor(2)">2</button>
+              <button class="btn-floor-choice" data-val="3" onclick="app.setFromFloor(3)">3</button>
+              <button class="btn-floor-choice" data-val="4" onclick="app.setFromFloor(4)">4</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">TO FLOOR</label>
+            <div class="floor-select-grid" id="toFloorGroup">
+              <button class="btn-floor-choice" data-val="1" onclick="app.setToFloor(1)">1</button>
+              <button class="btn-floor-choice" data-val="2" onclick="app.setToFloor(2)">2</button>
+              <button class="btn-floor-choice" data-val="3" onclick="app.setToFloor(3)">3</button>
+              <button class="btn-floor-choice selected-to" data-val="4" onclick="app.setToFloor(4)">4</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-primary" id="btnAddRequest" onclick="app.addManualRequest()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Add Request
+        </button>
+      </div>
+
+      <!-- Simulation Master Controls Card -->
+      <div class="control-card">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polygon points="10 8 16 12 10 16 10 8"/>
+          </svg>
+          Simulation Engine
+        </div>
+
+        <div class="sim-button-grid">
+          <button class="btn-sim-action btn-random" id="btnRandomArrival" onclick="app.addRandomRequest()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="2" width="20" height="20" rx="5"/>
+              <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/>
+              <circle cx="15.5" cy="8.5" r="1.5" fill="currentColor"/>
+              <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+              <circle cx="8.5" cy="15.5" r="1.5" fill="currentColor"/>
+              <circle cx="15.5" cy="15.5" r="1.5" fill="currentColor"/>
+            </svg>
+            Random Arrival
+          </button>
+
+          <button class="btn-sim-action btn-run" id="btnRun" onclick="app.startAutoMode()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Run (Auto)
+          </button>
+
+          <button class="btn-sim-action" id="btnStop" onclick="app.stopAutoMode()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
+            Stop
+          </button>
+
+          <button class="btn-sim-action btn-pause" id="btnPause" onclick="app.pauseSimulation()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            Pause
+          </button>
+
+          <button class="btn-sim-action" id="btnResume" onclick="app.resumeSimulation()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Resume
+          </button>
+        </div>
+
+        <div class="speed-control-group">
+          <span class="form-label">SIMULATION SPEED</span>
+          <div class="speed-pills">
+            <button class="btn-speed" onclick="app.setSpeed(0.5, this)">0.5x</button>
+            <button class="btn-speed active" onclick="app.setSpeed(1.0, this)">1.0x</button>
+            <button class="btn-speed" onclick="app.setSpeed(2.0, this)">2.0x</button>
+            <button class="btn-speed" onclick="app.setSpeed(4.0, this)">4.0x</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCAN Algorithm Live HUD -->
+      <div class="control-card algorithm-hud">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          SCAN Algorithm State
+        </div>
+
+        <div class="hud-explanation" id="hudExplanation">
+          IDLE: Waiting for passenger hall calls or car requests.
+        </div>
+
+        <div class="queue-chips-group">
+          <div class="queue-row">
+            <span class="queue-label">▲ UP Hall Calls:</span>
+            <div class="chips-list" id="chipListUp"><span style="color:#64748b; font-size:0.7rem">None</span></div>
+          </div>
+          <div class="queue-row">
+            <span class="queue-label">▼ DOWN Hall Calls:</span>
+            <div class="chips-list" id="chipListDown"><span style="color:#64748b; font-size:0.7rem">None</span></div>
+          </div>
+          <div class="queue-row">
+            <span class="queue-label">● Car Drop-offs:</span>
+            <div class="chips-list" id="chipListCar"><span style="color:#64748b; font-size:0.7rem">None</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Event Log -->
+      <div class="control-card">
+        <div class="card-title" style="justify-content: space-between;">
+          <span style="display:flex; align-items:center; gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            Live Activity Log
+          </span>
+          <span id="deliveredCount" style="font-family:'JetBrains Mono'; font-size:0.75rem; color:var(--accent-emerald);">0 DELIVERED</span>
+        </div>
+        <div class="log-container" id="activityLog">
+          <!-- Dynamically populated entries -->
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    Elevator SCAN Algorithm Demonstration • Designed for Responsive Visual Simulation • 4 Stories Single-Shaft
+  </footer>
+
+  <!-- JavaScript Simulation Core -->
+  <script>
+    /**
+     * PASSENGER AVATAR STYLES GENERATOR
+     */
+    const AVATAR_PALETTES = [
+      { hair: '#f59e0b', clothes: '#06b6d4', skin: '#fcd34d' },
+      { hair: '#8b5cf6', clothes: '#ec4899', skin: '#fed7aa' },
+      { hair: '#10b981', clothes: '#3b82f6', skin: '#ffedd5' },
+      { hair: '#ef4444', clothes: '#8b5cf6', skin: '#fde047' },
+      { hair: '#e2e8f0', clothes: '#10b981', skin: '#fed7aa' }
+    ];
+
+    class Passenger {
+      constructor(id, fromFloor, toFloor) {
+        this.id = id;
+        this.fromFloor = fromFloor;
+        this.toFloor = toFloor;
+        this.direction = toFloor > fromFloor ? 'UP' : 'DOWN';
+        this.palette = AVATAR_PALETTES[(id - 1) % AVATAR_PALETTES.length];
+        this.state = 'WAITING'; // 'WAITING', 'BOARDING', 'RIDING', 'ALIGHTING', 'EXITED'
+        this.domElement = this.createDOM();
+      }
+
+      createDOM() {
+        const wrap = document.createElement('div');
+        wrap.className = 'passenger-avatar';
+        wrap.id = `pax-${this.id}`;
+
+        const bubble = document.createElement('div');
+        bubble.className = `passenger-bubble ${this.direction === 'DOWN' ? 'dir-down' : ''}`;
+        bubble.innerText = `To ${this.toFloor}F`;
+        bubble.id = `pax-bubble-${this.id}`;
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'passenger-svg walking');
+        svg.setAttribute('viewBox', '0 0 30 50');
+
+        svg.innerHTML = `
+          <circle cx="15" cy="8" r="6" fill="${this.palette.skin}" />
+          <path d="M9 7 Q15 2 21 7" stroke="${this.palette.hair}" stroke-width="3" fill="none" stroke-linecap="round" />
+          <rect x="7" y="16" width="16" height="18" rx="4" fill="${this.palette.clothes}" />
+          <line class="leg-left" x1="10" y1="34" x2="10" y2="48" stroke="${this.palette.clothes}" stroke-width="4" stroke-linecap="round" />
+          <line class="leg-right" x1="20" y1="34" x2="20" y2="48" stroke="${this.palette.clothes}" stroke-width="4" stroke-linecap="round" />
+        `;
+
+        wrap.appendChild(bubble);
+        wrap.appendChild(svg);
+        return wrap;
+      }
+    }
+
+    /**
+     * ELEVATOR SYSTEM & SCAN CONTROLLER
+     */
+    class ElevatorSimulation {
+      constructor() {
+        // State
+        this.currentFloor = 1.0;      // Continuous position 1.0 to 4.0
+        this.targetFloor = 1;         // Discrete target floor
+        this.direction = 'IDLE';      // 'UP', 'DOWN', 'IDLE'
+        this.doorState = 'CLOSED';    // 'CLOSED', 'OPENING', 'OPEN', 'CLOSING'
+        this.doorProgress = 0.0;      // 0.0 (closed) to 1.0 (fully open)
+        this.doorHoldTimer = 0.0;     // Seconds to hold door open for boarding
+
+        // Collections
+        this.upHallCalls = new Set();    // Floors where people want to go UP
+        this.downHallCalls = new Set();  // Floors where people want to go DOWN
+        this.carCalls = new Set();       // Target floors requested by passengers inside
+
+        this.waitingPassengers = { 1: [], 2: [], 3: [], 4: [] };
+        this.onboardPassengers = [];
+        this.exitedPassengers = [];
+        this.passengerSeq = 1;
+        this.deliveredCount = 0;
+
+        // Configuration & Timing
+        this.speed = 1.0;
+        this.floorHeightPx = 130;
+        this.isPaused = false;
+        this.isAutoMode = false;
+        this.autoTimer = null;
+
+        // UI Selections
+        this.selectedFromFloor = 1;
+        this.selectedToFloor = 4;
+
+        // DOM Cache
+        this.carDom = document.getElementById('elevatorCar');
+        this.cableDom = document.getElementById('elevatorCable');
+        this.doorLeftDom = document.getElementById('carDoorLeft');
+        this.doorRightDom = document.getElementById('carDoorRight');
+        this.carPaxSlotDom = document.getElementById('carPassengersSlot');
+        this.carDisplayFloorDom = document.getElementById('carDisplayFloor');
+        this.carDisplayArrowDom = document.getElementById('carDisplayArrow');
+        this.carPaxCountDom = document.getElementById('carPaxCount');
+
+        this.telemFloorDom = document.getElementById('telemFloor');
+        this.telemDirDom = document.getElementById('telemDir');
+        this.telemDoorDom = document.getElementById('telemDoor');
+        this.telemPaxDom = document.getElementById('telemPax');
+        this.hudExplanationDom = document.getElementById('hudExplanation');
+        this.activityLogDom = document.getElementById('activityLog');
+        this.deliveredCountDom = document.getElementById('deliveredCount');
+        this.simStatusBadge = document.getElementById('simStatusBadge');
+        this.simStatusText = document.getElementById('simStatusText');
+
+        // Main Loop Setup
+        this.lastTimestamp = performance.now();
+        this.updateVisualPositions();
+        this.log('INIT', 'Elevator initialized at Floor 1 (Lobby) in IDLE state.');
+        requestAnimationFrame((t) => this.loop(t));
+      }
+
+      log(tag, message) {
+        const d = new Date();
+        const timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+        
+        let tagClass = 'tag-scan';
+        if (tag === 'REQUEST') tagClass = 'tag-req';
+        else if (tag === 'BOARD' || tag === 'EXIT') tagClass = 'tag-board';
+        else if (tag === 'DOOR') tagClass = 'tag-door';
+
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.innerHTML = `
+          <span class="log-time">${timeStr}</span>
+          <span class="log-tag ${tagClass}">[${tag}]</span>
+          <span>${message}</span>
+        `;
+        this.activityLogDom.prepend(entry);
+
+        if (this.activityLogDom.children.length > 50) {
+          this.activityLogDom.removeChild(this.activityLogDom.lastChild);
+        }
+      }
+
+      setFromFloor(val) {
+        this.selectedFromFloor = val;
+        document.querySelectorAll('#fromFloorGroup .btn-floor-choice').forEach(btn => {
+          btn.classList.toggle('selected', parseInt(btn.dataset.val) === val);
+        });
+        if (this.selectedToFloor === val) {
+          const next = val === 4 ? 3 : val + 1;
+          this.setToFloor(next);
+        }
+      }
+
+      setToFloor(val) {
+        if (val === this.selectedFromFloor) return;
+        this.selectedToFloor = val;
+        document.querySelectorAll('#toFloorGroup .btn-floor-choice').forEach(btn => {
+          btn.classList.toggle('selected-to', parseInt(btn.dataset.val) === val);
+        });
+      }
+
+      requestHallCall(floor, dir) {
+        if (dir === 'UP') this.upHallCalls.add(floor);
+        if (dir === 'DOWN') this.downHallCalls.add(floor);
+        this.updateHallButtons();
+        this.updateHUD();
+      }
+
+      addPassenger(fromFloor, toFloor) {
+        if (fromFloor === toFloor) return;
+        const pax = new Passenger(this.passengerSeq++, fromFloor, toFloor);
+        this.waitingPassengers[fromFloor].push(pax);
+
+        const container = document.getElementById(`waitingQueue${fromFloor}`);
+        if (container) container.appendChild(pax.domElement);
+
+        this.requestHallCall(fromFloor, pax.direction);
+        this.log('REQUEST', `Passenger #${pax.id} arrived at ${fromFloor}F requesting ${toFloor}F (${pax.direction})`);
+      }
+
+      addManualRequest() {
+        this.addPassenger(this.selectedFromFloor, this.selectedToFloor);
+      }
+
+      addRandomRequest() {
+        const from = Math.floor(Math.random() * 4) + 1;
+        let to = Math.floor(Math.random() * 4) + 1;
+        while (to === from) {
+          to = Math.floor(Math.random() * 4) + 1;
+        }
+        this.addPassenger(from, to);
+      }
+
+      startAutoMode() {
+        this.isAutoMode = true;
+        document.getElementById('btnRun').classList.add('active');
+        if (this.autoTimer) clearInterval(this.autoTimer);
+        this.autoTimer = setInterval(() => {
+          if (!this.isPaused && this.isAutoMode) {
+            this.addRandomRequest();
+          }
+        }, 3200 / this.speed);
+        this.log('SCAN', 'Automatic passenger arrival traffic enabled.');
+      }
+
+      stopAutoMode() {
+        this.isAutoMode = false;
+        document.getElementById('btnRun').classList.remove('active');
+        if (this.autoTimer) {
+          clearInterval(this.autoTimer);
+          this.autoTimer = null;
+        }
+        this.log('SCAN', 'Automatic traffic stopped.');
+      }
+
+      pauseSimulation() {
+        this.isPaused = true;
+        document.getElementById('btnPause').classList.add('active');
+        this.simStatusBadge.classList.add('paused');
+        this.simStatusText.innerText = 'SIMULATION PAUSED';
+        this.log('SIM', 'Simulation paused. You can queue multiple requests before resuming.');
+      }
+
+      resumeSimulation() {
+        this.isPaused = false;
+        document.getElementById('btnPause').classList.remove('active');
+        this.simStatusBadge.classList.remove('paused');
+        this.simStatusText.innerText = 'ACTIVE SIMULATION';
+        this.log('SIM', 'Simulation resumed.');
+      }
+
+      setSpeed(multiplier, btn) {
+        this.speed = multiplier;
+        document.querySelectorAll('.btn-speed').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        if (this.isAutoMode) {
+          this.startAutoMode(); // Restart interval with new speed
+        }
+        this.log('SIM', `Speed set to ${multiplier}x`);
+      }
+
+      hasHigherRequests(pos) {
+        return Array.from(this.carCalls).some(f => f > pos + 0.05) ||
+               Array.from(this.upHallCalls).some(f => f > pos + 0.05) ||
+               Array.from(this.downHallCalls).some(f => f > pos + 0.05);
+      }
+
+      hasLowerRequests(pos) {
+        return Array.from(this.carCalls).some(f => f < pos - 0.05) ||
+               Array.from(this.upHallCalls).some(f => f < pos - 0.05) ||
+               Array.from(this.downHallCalls).some(f => f < pos - 0.05);
+      }
+
+      /**
+       * PURE SCAN / LOOK ALGORITHM DISPATCHER
+       */
+      evaluateSCANDecision() {
+        const currentFloorInt = Math.round(this.currentFloor);
+        const isAtFloorExact = Math.abs(this.currentFloor - currentFloorInt) < 0.05;
+
+        const higherExists = this.hasHigherRequests(this.currentFloor);
+        const lowerExists = this.hasLowerRequests(this.currentFloor);
+
+        // Does current floor have pending services?
+        const hasCarDropoffHere = this.carCalls.has(currentFloorInt);
+        const hasUpPickupHere = this.upHallCalls.has(currentFloorInt);
+        const hasDownPickupHere = this.downHallCalls.has(currentFloorInt);
+
+        // 1. IF IDLE:
+        if (this.direction === 'IDLE') {
+          if (isAtFloorExact && (hasCarDropoffHere || hasUpPickupHere || hasDownPickupHere)) {
+            if (hasUpPickupHere) {
+              this.direction = 'UP';
+            } else if (hasDownPickupHere) {
+              this.direction = 'DOWN';
+            } else if (higherExists) {
+              this.direction = 'UP';
+            } else if (lowerExists) {
+              this.direction = 'DOWN';
+            }
+            this.currentFloor = currentFloorInt;
+            this.openDoors();
+            return;
+          }
+          if (higherExists) {
+            this.direction = 'UP';
+            this.log('SCAN', `New request detected above. Direction set to UP.`);
+          } else if (lowerExists) {
+            this.direction = 'DOWN';
+            this.log('SCAN', `New request detected below. Direction set to DOWN.`);
+          }
+          return;
+        }
+
+        // 2. IF MOVING UP:
+        if (this.direction === 'UP') {
+          if (isAtFloorExact) {
+            const higherBeyondThisFloor = this.hasHigherRequests(currentFloorInt);
+            const shouldStop = hasCarDropoffHere ||
+                               hasUpPickupHere ||
+                               (!higherBeyondThisFloor && hasDownPickupHere);
+
+            if (shouldStop && this.doorState === 'CLOSED') {
+              this.currentFloor = currentFloorInt;
+              this.openDoors();
+              return;
+            }
+          }
+
+          // Check if there are no higher requests ahead
+          if (!higherExists) {
+            if (lowerExists) {
+              this.direction = 'DOWN';
+              this.log('SCAN', `No further requests UP. Reversing SCAN sweep to DOWN.`);
+            } else if (!hasCarDropoffHere && !hasUpPickupHere && !hasDownPickupHere) {
+              this.direction = 'IDLE';
+              this.log('SCAN', `All requests served. Returning to IDLE.`);
+            }
+          }
+          return;
+        }
+
+        // 3. IF MOVING DOWN:
+        if (this.direction === 'DOWN') {
+          if (isAtFloorExact) {
+            const lowerBeyondThisFloor = this.hasLowerRequests(currentFloorInt);
+            const shouldStop = hasCarDropoffHere ||
+                               hasDownPickupHere ||
+                               (!lowerBeyondThisFloor && hasUpPickupHere);
+
+            if (shouldStop && this.doorState === 'CLOSED') {
+              this.currentFloor = currentFloorInt;
+              this.openDoors();
+              return;
+            }
+          }
+
+          // Check if there are no lower requests ahead
+          if (!lowerExists) {
+            if (higherExists) {
+              this.direction = 'UP';
+              this.log('SCAN', `No further requests DOWN. Reversing SCAN sweep to UP.`);
+            } else if (!hasCarDropoffHere && !hasUpPickupHere && !hasDownPickupHere) {
+              this.direction = 'IDLE';
+              this.log('SCAN', `All requests served. Returning to IDLE.`);
+            }
+          }
+        }
+      }
+
+      openDoors() {
+        this.doorState = 'OPENING';
+        this.doorProgress = 0.0;
+        this.log('DOOR', `Arrived at Floor ${Math.round(this.currentFloor)}. Doors opening...`);
+      }
+
+      closeDoors() {
+        this.doorState = 'CLOSING';
+        this.log('DOOR', `Doors closing at Floor ${Math.round(this.currentFloor)}.`);
+      }
+
+      processBoardingAndAlighting() {
+        const floor = Math.round(this.currentFloor);
+
+        // 1. Alight Passengers
+        const remainingOnboard = [];
+        for (const pax of this.onboardPassengers) {
+          if (pax.toFloor === floor) {
+            pax.state = 'ALIGHTING';
+            this.deliveredCount++;
+            this.deliveredCountDom.innerText = `${this.deliveredCount} DELIVERED`;
+            
+            // Move avatar to exit queue on the floor
+            const exitCol = document.getElementById(`exitQueue${floor}`);
+            if (exitCol) {
+              pax.domElement.classList.remove('in-car');
+              const bubble = document.getElementById(`pax-bubble-${pax.id}`);
+              if (bubble) {
+                bubble.className = 'passenger-bubble arrived';
+                bubble.innerText = 'Arrived!';
+              }
+              exitCol.appendChild(pax.domElement);
+              
+              // Fade out after walking away
+              setTimeout(() => {
+                pax.domElement.style.opacity = '0';
+                setTimeout(() => {
+                  if (pax.domElement.parentNode) {
+                    pax.domElement.parentNode.removeChild(pax.domElement);
+                  }
+                }, 600);
+              }, 1200);
+            }
+            this.log('EXIT', `Passenger #${pax.id} reached destination Floor ${floor}!`);
+          } else {
+            remainingOnboard.push(pax);
+          }
+        }
+        this.onboardPassengers = remainingOnboard;
+        this.carCalls.delete(floor);
+
+        // 2. Board Passengers
+        const waiting = this.waitingPassengers[floor];
+        const stillWaiting = [];
+
+        const higherBeyond = this.hasHigherRequests(floor);
+        const lowerBeyond = this.hasLowerRequests(floor);
+
+        for (const pax of waiting) {
+          const matchDirection = (this.direction === 'UP' && pax.direction === 'UP') ||
+                                 (this.direction === 'DOWN' && pax.direction === 'DOWN') ||
+                                 (this.direction === 'IDLE') ||
+                                 (this.direction === 'UP' && !higherBeyond && pax.direction === 'DOWN') ||
+                                 (this.direction === 'DOWN' && !lowerBeyond && pax.direction === 'UP');
+
+          if (matchDirection) {
+            pax.state = 'RIDING';
+            this.onboardPassengers.push(pax);
+            this.carCalls.add(pax.toFloor);
+
+            // Move DOM to car slot
+            pax.domElement.classList.add('in-car');
+            const bubble = document.getElementById(`pax-bubble-${pax.id}`);
+            if (bubble) bubble.innerText = `${pax.toFloor}F`;
+            this.carPaxSlotDom.appendChild(pax.domElement);
+
+            if (this.direction === 'IDLE') {
+              this.direction = pax.direction;
+            } else if (this.direction === 'UP' && !higherBeyond && pax.direction === 'DOWN') {
+              this.direction = 'DOWN';
+            } else if (this.direction === 'DOWN' && !lowerBeyond && pax.direction === 'UP') {
+              this.direction = 'UP';
+            }
+            this.log('BOARD', `Passenger #${pax.id} boarded elevator for Floor ${pax.toFloor}.`);
+          } else {
+            stillWaiting.push(pax);
+          }
+        }
+        this.waitingPassengers[floor] = stillWaiting;
+
+        // Clear hall call if no one left in that direction
+        if (!stillWaiting.some(p => p.direction === 'UP')) this.upHallCalls.delete(floor);
+        if (!stillWaiting.some(p => p.direction === 'DOWN')) this.downHallCalls.delete(floor);
+
+        this.updateHallButtons();
+        this.updateHUD();
+      }
+
+      /**
+       * MAIN SIMULATION TICK
+       */
+      loop(currentTimestamp) {
+        const deltaSeconds = Math.min((currentTimestamp - this.lastTimestamp) / 1000, 0.1);
+        this.lastTimestamp = currentTimestamp;
+
+        if (!this.isPaused) {
+          this.tick(deltaSeconds * this.speed);
+        }
+
+        this.updateVisualPositions();
+        requestAnimationFrame((t) => this.loop(t));
+      }
+
+      tick(dt) {
+        // Handle Door Opening/Closing Animation & Dwell
+        if (this.doorState === 'OPENING') {
+          this.doorProgress += dt * 2.5; // ~0.4s to open
+          if (this.doorProgress >= 1.0) {
+            this.doorProgress = 1.0;
+            this.doorState = 'OPEN';
+            this.doorHoldTimer = 1.2; // Stay open for 1.2s
+            this.processBoardingAndAlighting();
+          }
+        } else if (this.doorState === 'OPEN') {
+          this.doorHoldTimer -= dt;
+          if (this.doorHoldTimer <= 0) {
+            this.closeDoors();
+          }
+        } else if (this.doorState === 'CLOSING') {
+          this.doorProgress -= dt * 2.5;
+          if (this.doorProgress <= 0.0) {
+            this.doorProgress = 0.0;
+            this.doorState = 'CLOSED';
+
+            // Post-door-close directional check using precise float checks
+            const higherExists = this.hasHigherRequests(this.currentFloor);
+            const lowerExists = this.hasLowerRequests(this.currentFloor);
+
+            if (this.direction === 'UP' && !higherExists) {
+              this.direction = lowerExists ? 'DOWN' : 'IDLE';
+            } else if (this.direction === 'DOWN' && !lowerExists) {
+              this.direction = higherExists ? 'UP' : 'IDLE';
+            } else if (this.direction === 'IDLE') {
+              if (higherExists) this.direction = 'UP';
+              else if (lowerExists) this.direction = 'DOWN';
+            }
+            this.updateHUD();
+          }
+        } else if (this.doorState === 'CLOSED') {
+          this.evaluateSCANDecision();
+
+          // Physical Movement
+          const moveSpeedFloorsPerSec = 0.8; // 0.8 floors per second
+          if (this.direction === 'UP') {
+            this.currentFloor += moveSpeedFloorsPerSec * dt;
+            if (this.currentFloor >= 4.0) {
+              this.currentFloor = 4.0;
+            }
+          } else if (this.direction === 'DOWN') {
+            this.currentFloor -= moveSpeedFloorsPerSec * dt;
+            if (this.currentFloor <= 1.0) {
+              this.currentFloor = 1.0;
+            }
+          }
+        }
+      }
+
+      /**
+       * VISUAL DOM & TELEMETRY UPDATES
+       */
+      updateVisualPositions() {
+        // Floor position in pixels
+        const bottomOffset = 12 + (this.currentFloor - 1.0) * this.floorHeightPx;
+        this.carDom.style.transform = `translateY(${- (this.currentFloor - 1.0) * this.floorHeightPx}px)`;
+
+        // Cable height stretches from top of roof down to car
+        const totalHeight = 4 * this.floorHeightPx + 40;
+        const carTopFromBottom = 12 + (this.currentFloor - 1.0) * this.floorHeightPx + 104;
+        const cableHeight = Math.max(0, totalHeight - carTopFromBottom);
+        this.cableDom.style.height = `${cableHeight}px`;
+
+        // Door Sliding Width
+        const doorPercent = this.doorProgress * 92;
+        this.doorLeftDom.style.transform = `translateX(-${doorPercent}%)`;
+        this.doorRightDom.style.transform = `translateX(${doorPercent}%)`;
+
+        // Telemetry Text
+        const approxFloor = Math.round(this.currentFloor * 10) / 10;
+        this.telemFloorDom.innerText = `${approxFloor.toFixed(1)} F`;
+        this.carDisplayFloorDom.innerText = `${Math.round(this.currentFloor)}F`;
+
+        // Arrow Indicator
+        if (this.direction === 'UP') {
+          this.telemDirDom.className = 'telemetry-value dir-up';
+          this.telemDirDom.innerText = '▲ ASCENDING';
+          this.carDisplayArrowDom.innerText = '▲';
+          this.carDisplayArrowDom.style.color = 'var(--accent-cyan)';
+        } else if (this.direction === 'DOWN') {
+          this.telemDirDom.className = 'telemetry-value dir-down';
+          this.telemDirDom.innerText = '▼ DESCENDING';
+          this.carDisplayArrowDom.innerText = '▼';
+          this.carDisplayArrowDom.style.color = 'var(--accent-amber)';
+        } else {
+          this.telemDirDom.className = 'telemetry-value dir-idle';
+          this.telemDirDom.innerText = '⏹ IDLE';
+          this.carDisplayArrowDom.innerText = '•';
+          this.carDisplayArrowDom.style.color = 'var(--text-muted)';
+        }
+
+        this.telemDoorDom.innerText = this.doorState;
+        if (this.doorState === 'OPEN' || this.doorState === 'OPENING') {
+          this.telemDoorDom.style.color = 'var(--accent-emerald)';
+        } else if (this.doorState === 'CLOSING') {
+          this.telemDoorDom.style.color = 'var(--accent-amber)';
+        } else {
+          this.telemDoorDom.style.color = '#f8fafc';
+        }
+
+        const totalWaiting = Object.values(this.waitingPassengers).reduce((sum, arr) => sum + arr.length, 0);
+        this.telemPaxDom.innerText = `${this.onboardPassengers.length} / ${totalWaiting}`;
+        this.carPaxCountDom.innerText = `${this.onboardPassengers.length} PAX`;
+      }
+
+      updateHallButtons() {
+        for (let f = 1; f <= 4; f++) {
+          const upBtn = document.getElementById(`btnHallUp${f}`);
+          const downBtn = document.getElementById(`btnHallDown${f}`);
+          if (upBtn) upBtn.classList.toggle('active-up', this.upHallCalls.has(f));
+          if (downBtn) downBtn.classList.toggle('active-down', this.downHallCalls.has(f));
+        }
+      }
+
+      updateHUD() {
+        // UP Chips
+        const upEl = document.getElementById('chipListUp');
+        if (this.upHallCalls.size === 0) {
+          upEl.innerHTML = '<span style="color:#64748b; font-size:0.7rem">None</span>';
+        } else {
+          upEl.innerHTML = Array.from(this.upHallCalls).sort((a,b)=>a-b).map(f => `<span class="chip-floor up">${f}F</span>`).join('');
+        }
+
+        // DOWN Chips
+        const downEl = document.getElementById('chipListDown');
+        if (this.downHallCalls.size === 0) {
+          downEl.innerHTML = '<span style="color:#64748b; font-size:0.7rem">None</span>';
+        } else {
+          downEl.innerHTML = Array.from(this.downHallCalls).sort((a,b)=>b-a).map(f => `<span class="chip-floor down">${f}F</span>`).join('');
+        }
+
+        // CAR Chips
+        const carEl = document.getElementById('chipListCar');
+        if (this.carCalls.size === 0) {
+          carEl.innerHTML = '<span style="color:#64748b; font-size:0.7rem">None</span>';
+        } else {
+          carEl.innerHTML = Array.from(this.carCalls).sort((a,b)=>a-b).map(f => `<span class="chip-floor car">${f}F</span>`).join('');
+        }
+
+        // Explanation text
+        if (this.direction === 'UP') {
+          this.hudExplanationDom.innerText = `SCAN SWEEP (UP): Servicing upward hall calls and drop-offs until highest request, then checking reverse.`;
+        } else if (this.direction === 'DOWN') {
+          this.hudExplanationDom.innerText = `SCAN SWEEP (DOWN): Servicing downward hall calls and drop-offs until lowest request, then checking reverse.`;
+        } else {
+          this.hudExplanationDom.innerText = `IDLE: Waiting for passenger hall calls or car requests.`;
+        }
+      }
+    }
+
+    // Initialize simulation application on page load
+    let app;
+    window.addEventListener('DOMContentLoaded', () => {
+      app = new ElevatorSimulation();
+    });
+  </script>
+</body>
+</html>
