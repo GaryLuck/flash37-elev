@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Elevator Algorithm (SCAN) Interactive Simulation</title>
+  <title>Elevator Algorithm (LOOK) Interactive Simulation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -245,7 +245,7 @@
     }
 
     .roof-motor-room::after {
-      content: 'TRACTION MOTOR & SCAN CONTROLLER ROOM';
+      content: 'TRACTION MOTOR & LOOK CONTROLLER ROOM';
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.68rem;
       letter-spacing: 2px;
@@ -852,7 +852,7 @@
       color: #fff;
     }
 
-    /* SCAN Algorithm Inspector HUD */
+    /* LOOK Algorithm Inspector HUD */
     .algorithm-hud {
       display: flex;
       flex-direction: column;
@@ -953,7 +953,7 @@
 
     .tag-req { background: rgba(0, 240, 255, 0.15); color: var(--accent-cyan); }
     .tag-board { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
-    .tag-scan { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; }
+    .tag-look { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; }
     .tag-door { background: rgba(255, 183, 3, 0.15); color: var(--accent-amber); }
 
     /* Footer */
@@ -980,7 +980,7 @@
         </svg>
       </div>
       <div class="logo-title">
-        <h1>ELEVATOR SCAN SIMULATOR</h1>
+        <h1>ELEVATOR LOOK SIMULATOR</h1>
         <span>DISPATCH ALGORITHM • 4-STORY ARCHITECTURE</span>
       </div>
     </div>
@@ -1004,7 +1004,7 @@
           <div class="telemetry-value" id="telemFloor">1.0</div>
         </div>
         <div class="telemetry-item">
-          <span class="telemetry-label">SCAN Direction</span>
+          <span class="telemetry-label">LOOK Direction</span>
           <div class="telemetry-value dir-idle" id="telemDir">⏹ IDLE</div>
         </div>
         <div class="telemetry-item">
@@ -1150,7 +1150,7 @@
       </div>
     </section>
 
-    <!-- Right Sidebar: Interactive Controls & SCAN HUD -->
+    <!-- Right Sidebar: Interactive Controls & LOOK HUD -->
     <aside class="controls-sidebar">
       <!-- Manual Request Card -->
       <div class="control-card">
@@ -1250,13 +1250,13 @@
         </div>
       </div>
 
-      <!-- SCAN Algorithm Live HUD -->
+      <!-- LOOK Algorithm Live HUD -->
       <div class="control-card algorithm-hud">
         <div class="card-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
           </svg>
-          SCAN Algorithm State
+          LOOK Algorithm State
         </div>
 
         <div class="hud-explanation" id="hudExplanation">
@@ -1301,7 +1301,7 @@
   </main>
 
   <footer>
-    Elevator SCAN Algorithm Demonstration • Designed for Responsive Visual Simulation • 4 Stories Single-Shaft
+    Elevator LOOK Algorithm Demonstration • Designed for Responsive Visual Simulation • 4 Stories Single-Shaft
   </footer>
 
 
@@ -1353,7 +1353,7 @@
     }
 
     /**
-     * ElevatorSimulation — SCAN / LOOK dispatch algorithm.
+     * ElevatorSimulation — LOOK dispatch algorithm.
      *
      * Key design decisions:
      *  1. tick() is fully sequential: door animation -> idle check -> move -> floor-arrival check.
@@ -1448,13 +1448,13 @@
         return false;
       }
 
-      chooseSCANDirection(fromFloor) {
+      chooseLOOKDirection(fromFloor) {
         if (this.anyAbove(fromFloor)) {
           this.direction = 'UP';
-          this.log('SCAN', `Requests above Floor ${fromFloor} — heading UP.`);
+          this.log('LOOK', `Requests above Floor ${fromFloor} — heading UP.`);
         } else if (this.anyBelow(fromFloor)) {
           this.direction = 'DOWN';
-          this.log('SCAN', `Requests below Floor ${fromFloor} — heading DOWN.`);
+          this.log('LOOK', `Requests below Floor ${fromFloor} — heading DOWN.`);
         } else {
           this.direction = 'IDLE';
         }
@@ -1525,10 +1525,10 @@
         if (!leftBehind.some(p => p.direction === 'DOWN')) this.downHallCalls.delete(floor);
 
         if (this.direction === 'UP' && !this.anyAbove(floor)) {
-          if (this.anyBelow(floor)) { this.direction = 'DOWN'; this.log('SCAN', `Terminal UP at Floor ${floor} — reversing DOWN.`); }
+          if (this.anyBelow(floor)) { this.direction = 'DOWN'; this.log('LOOK', `Last request reached at Floor ${floor} — reversing DOWN.`); }
           else if (!this.anyPending()) { this.direction = 'IDLE'; }
         } else if (this.direction === 'DOWN' && !this.anyBelow(floor)) {
-          if (this.anyAbove(floor)) { this.direction = 'UP'; this.log('SCAN', `Terminal DOWN at Floor ${floor} — reversing UP.`); }
+          if (this.anyAbove(floor)) { this.direction = 'UP'; this.log('LOOK', `Last request reached at Floor ${floor} — reversing UP.`); }
           else if (!this.anyPending()) { this.direction = 'IDLE'; }
         }
 
@@ -1568,7 +1568,7 @@
             } else if ((this.direction === 'UP' && !this.anyAbove(f)) ||
                        (this.direction === 'DOWN' && !this.anyBelow(f)) ||
                         this.direction === 'IDLE') {
-              this.chooseSCANDirection(f);
+              this.chooseLOOKDirection(f);
             }
             this.updateHUD();
           }
@@ -1576,7 +1576,7 @@
         }
 
         if (this.direction === 'IDLE') {
-          if (this.anyPending()) this.chooseSCANDirection(Math.round(this.currentFloor));
+          if (this.anyPending()) this.chooseLOOKDirection(Math.round(this.currentFloor));
           return;
         }
 
@@ -1598,18 +1598,12 @@
           return;
         }
 
-        if (this.currentFloor >= 4.0 && this.direction === 'UP' && this.doorState === 'CLOSED') {
-          this.currentFloor = 4.0; this.openDoors();
-        }
-        if (this.currentFloor <= 1.0 && this.direction === 'DOWN' && this.doorState === 'CLOSED') {
-          this.currentFloor = 1.0; this.openDoors();
-        }
       }
 
       log(tag, message) {
         const d = new Date();
         const t = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
-        const cls = tag === 'REQUEST' ? 'tag-req' : (tag === 'BOARD' || tag === 'EXIT') ? 'tag-board' : tag === 'DOOR' ? 'tag-door' : 'tag-scan';
+        const cls = tag === 'REQUEST' ? 'tag-req' : (tag === 'BOARD' || tag === 'EXIT') ? 'tag-board' : tag === 'DOOR' ? 'tag-door' : 'tag-look';
         const e = document.createElement('div');
         e.className = 'log-entry';
         e.innerHTML = `<span class="log-time">${t}</span><span class="log-tag ${cls}">[${tag}]</span><span>${message}</span>`;
@@ -1750,8 +1744,8 @@
         document.getElementById('chipListCar').innerHTML  = this.carCalls.size      ? [...this.carCalls].sort((a,b)=>a-b).map(f=>`<span class="chip-floor car">${f}F</span>`).join('') : none;
 
         this.hudExplanationDom.innerText =
-          this.direction === 'UP'   ? 'SCAN SWEEP (UP): Serving upward calls and drop-offs. Reverses at highest pending request.' :
-          this.direction === 'DOWN' ? 'SCAN SWEEP (DOWN): Serving downward calls and drop-offs. Reverses at lowest pending request.' :
+          this.direction === 'UP'   ? 'LOOK SWEEP (UP): Travelling to the last pending request above. Reverses at the highest requested floor.' :
+          this.direction === 'DOWN' ? 'LOOK SWEEP (DOWN): Travelling to the last pending request below. Reverses at the lowest requested floor.' :
                                      'IDLE: No pending requests. Waiting for hall calls or manual requests.';
       }
     }
